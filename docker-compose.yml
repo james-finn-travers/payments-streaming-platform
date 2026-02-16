@@ -1,0 +1,155 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=ruok,srvr,stat"
+    networks:
+      - payments-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - payments-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: payments-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - payments-network
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_DB: payments_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/db_config.yaml:/app/config/db_config.yaml  # Mount config if needed
+    networks:
+      - payments-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d payments_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  producer:
+    image: python:3.9-slim
+    container_name: producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./producer:/app/producer
+      - ./config:/app/config
+    working_dir: /app
+    command: python producer/producer.py  # Update once producer.py is implemented
+    networks:
+      - payments-network
+
+  streaming-processor:
+    image: apache/spark:3.4.0-scala2.12-java11-python3-ubuntu
+    container_name: streaming-processor
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./streaming:/app/streaming
+      - ./config:/app/config
+    working_dir: /app
+    command: spark-submit --master local[*] streaming/processor.py  # Update for Structured Streaming once implemented
+    networks:
+      - payments-network
+
+  consumer:
+    image: python:3.9-slim
+    container_name: consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./consumers:/app/consumers
+      - ./config:/app/config
+    working_dir: /app
+    command: python consumers/db_sink.py  # Update once db_sink.py is implemented
+    networks:
+      - payments-network
+
+  dashboard:
+    image: python:3.9-slim
+    container_name: dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/app/dashboard
+      - ./config:/app/config
+    working_dir: /app
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0  # Update once app.py is implemented
+    networks:
+      - payments-network
+
+volumes:
+  postgres_data:
+
+networks:
+  payments-network:
+    driver: bridge
