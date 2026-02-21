@@ -1,0 +1,6 @@
+# Streamlit dashboard dependencies (Week 4)
+-r base.txt
+streamlit>=1.31
+pymongo>=4.6
+pandas>=2.1
+altair>=5.2

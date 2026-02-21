@@ -1,0 +1,4 @@
+# Shared dependencies
+kafka-python==2.0.2
+python-dateutil>=2.8
+pyyaml>=6.0

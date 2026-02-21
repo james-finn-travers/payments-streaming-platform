@@ -1,0 +1,3 @@
+# Consumer (MongoDB sink) dependencies
+-r base.txt
+pymongo>=4.6

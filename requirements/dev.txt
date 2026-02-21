@@ -1,0 +1,8 @@
+# Development & testing dependencies
+-r producer.txt
+-r consumer.txt
+pytest>=8.0
+pytest-cov>=4.1
+pytest-timeout>=2.2
+jsonschema>=4.21
+locust>=2.23

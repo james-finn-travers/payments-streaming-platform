@@ -1,0 +1,4 @@
+# Producer dependencies
+-r base.txt
+faker>=22.0
+lz4>=4.3

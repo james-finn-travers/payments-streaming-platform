@@ -1,0 +1,11 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements/base.txt requirements/base.txt
+COPY requirements/producer.txt requirements/producer.txt
+RUN pip install --no-cache-dir -r requirements/producer.txt
+
+COPY producer/ producer/
+
+CMD ["python", "-m", "producer.producer"]

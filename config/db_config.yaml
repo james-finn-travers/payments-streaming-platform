@@ -1,0 +1,39 @@
+# MongoDB Configuration
+# Real-Time Customer Transaction Analytics Pipeline
+
+mongodb:
+  # Local development (Docker)
+  uri: "mongodb://mongo:27017"
+  # Atlas (production) — set via MONGO_URI env var
+  # uri: "mongodb+srv://<user>:<pass>@cluster.mongodb.net"
+
+  database: txn_analytics
+
+  collections:
+    transactions:
+      type: timeseries
+      time_field: timestamp
+      meta_field: user_id
+      granularity: seconds
+      indexes:
+        - field: txn_id
+          unique: true
+          sparse: true
+        - field: merchant_id
+        - field: merchant_category
+
+    anomalies:
+      type: timeseries
+      time_field: timestamp
+      meta_field: user_id
+      granularity: seconds
+      indexes:
+        - field: txn_id
+          unique: true
+          sparse: true
+        - field: z_score
+
+  connection_pool:
+    max_pool_size: 50
+    min_pool_size: 5
+    max_idle_time_ms: 30000

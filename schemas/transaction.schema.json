@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jamestravers/customer-transaction-analytics/schemas/transaction.schema.json",
+  "title": "Transaction",
+  "description": "Synthetic e-commerce transaction event produced by the Faker generator",
+  "type": "object",
+  "required": [
+    "txn_id",
+    "user_id",
+    "amount",
+    "currency",
+    "timestamp",
+    "merchant_id",
+    "merchant_category",
+    "payment_method",
+    "status",
+    "location"
+  ],
+  "properties": {
+    "txn_id": {
+      "type": "string",
+      "description": "Deterministic SHA-256 transaction ID (24 hex chars) for idempotency",
+      "pattern": "^[a-f0-9]{24}$"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Unique user identifier (e.g., user_000001)",
+      "pattern": "^user_\\d{6}$"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Transaction amount in the specified currency",
+      "minimum": 0.01,
+      "maximum": 15000.00
+    },
+    "currency": {
+      "type": "string",
+      "description": "ISO 4217 currency code",
+      "enum": ["CAD", "USD", "EUR", "GBP"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the transaction"
+    },
+    "merchant_id": {
+      "type": "string",
+      "description": "Unique merchant identifier (e.g., merchant_0001)",
+      "pattern": "^merchant_\\d{4}$"
+    },
+    "merchant_category": {
+      "type": "string",
+      "description": "Merchant business category",
+      "enum": [
+        "grocery",
+        "electronics",
+        "clothing",
+        "restaurant",
+        "travel",
+        "entertainment",
+        "health",
+        "gas_station",
+        "subscription",
+        "marketplace"
+      ]
+    },
+    "payment_method": {
+      "type": "string",
+      "description": "Payment instrument used",
+      "enum": [
+        "credit_card",
+        "debit_card",
+        "e_transfer",
+        "apple_pay",
+        "google_pay"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "description": "Transaction approval status",
+      "enum": ["approved", "declined", "pending"]
+    },
+    "location": {
+      "type": "object",
+      "description": "Geographic coordinates of the transaction",
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
