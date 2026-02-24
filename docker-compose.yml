@@ -119,6 +119,21 @@ services:
     networks:
       - txn-network
 
+  airflow-webserver:
+    image: apache/airflow:2.8.1-python3.9
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./dbt_models:/opt/dbt_models
+    ports:
+      - "8081:8080"
+    command: airflow standalone
+    depends_on:
+      - mongodb
+
 volumes:
   mongo_data:
 

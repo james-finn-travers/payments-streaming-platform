@@ -1,6 +1,8 @@
 # Real-Time Customer Transaction Analytics Pipeline
 
-A **production-grade data engineering project** that ingests 10k+ synthetic e-commerce transactions per second, processes them through a real-time streaming engine with anomaly detection, persists results to MongoDB (time-series), and serves live analytics via a FastAPI backend and Streamlit dashboard — designed for Azure deployment.
+Built to demonstrate end-to-end data engineering: real-time streaming, batch orchestration, and analytics serving.
+
+A **production-grade data engineering project** that ingests synthetic e-commerce transactions (designed for 10k+ txns/sec), processes them through a real-time streaming engine with anomaly detection, and persists results to MongoDB (time-series) — designed for Azure deployment.
 
 ---
 
@@ -14,21 +16,26 @@ flowchart LR
     C -->|anomalies| B
     B --> D[MongoDB Sink]
     D --> E[(MongoDB\nTime-Series)]
-    E --> F[dbt Models]
+    I[Airflow Scheduler] -->|orchestrates| F[dbt Models]
+    I -->|triggers| J[Data Quality Checks]
+    E --> F
     E --> G[FastAPI]
     G --> H[Streamlit Dashboard]
 ```
 
 **Data Flow:**
 
-1. **Producer** generates synthetic e-commerce transactions (Faker) and publishes to Kafka `transactions` topic at 10k+ txns/sec.
+1. **Producer** generates synthetic e-commerce transactions (Faker) and publishes to Kafka `transactions` topic (designed for 10k+ txns/sec).
 2. **PyFlink Processor** consumes events, applies per-user tumbling-window aggregations and z-score anomaly detection (Welford's algorithm), then writes:
    - Enriched events → `transactions_enriched` topic.
    - Anomalies (z > 3 SD) → `anomalies` topic.
 3. **MongoDB Sink** consumer upserts enriched transactions and anomalies into MongoDB time-series collections.
-4. **dbt** transforms raw data into merchant rollups and daily revenue models.
-5. **FastAPI** exposes REST endpoints (`/users/{id}/trends`, `/anomalies`, `/merchants/top`).
-6. **Streamlit Dashboard** provides live charts: transaction volume, top merchants, anomaly alerts.
+4. **Airflow** orchestrates scheduled batch workloads — dbt model runs, data quality checks, and MongoDB maintenance tasks.
+5. **dbt** transforms raw data into merchant rollups and daily revenue models.
+6. **FastAPI** exposes REST endpoints (`/users/{id}/trends`, `/anomalies`, `/merchants/top`).
+7. **Streamlit Dashboard** provides live charts: transaction volume, top merchants, anomaly alerts.
+
+> **Status:** Core streaming pipeline (steps 1–3) is complete and functional. Orchestration, batch models, API, and dashboard are in active development.
 
 ---
 
@@ -39,6 +46,7 @@ flowchart LR
 | **Streaming** | Apache Kafka | Event ingestion & topic routing |
 | **Processing** | PyFlink (Apache Flink) | Stateful aggregations, z-score anomaly detection |
 | **Storage** | MongoDB (time-series collections) | Transactions + anomalies persistence |
+| **Orchestration** | Apache Airflow | Scheduled DAGs for dbt, data quality, maintenance |
 | **Analytics** | dbt | Merchant rollups, daily revenue models |
 | **API** | FastAPI | RESTful query endpoints |
 | **Dashboard** | Streamlit | Live monitoring & visualization |
@@ -63,19 +71,6 @@ flowchart LR
 - **MongoDB time-series storage**:
   - Optimised time-series collections with secondary indexes
   - Idempotent upserts (batch bulk writes)
-- **dbt analytics models** (planned):
-  - `daily_merchant_revenue` — revenue by merchant per day
-  - `top_spenders` — highest-spending users
-  - `anomaly_summary` — anomaly breakdown by category
-- **FastAPI REST API** (planned):
-  - `GET /health` — health check
-  - `GET /users/{user_id}/trends` — per-user spending trends
-  - `GET /anomalies` — recent anomalies with pagination
-  - `GET /merchants/top` — top merchants by revenue
-- **Streamlit dashboard** (planned):
-  - Live transaction volume chart
-  - Top merchants bar chart
-  - Anomaly alerts table with z-scores
 
 ---
 
@@ -83,23 +78,27 @@ flowchart LR
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| Throughput | 10k+ txns/sec | ✅ 1k/sec local (Week 1) |
-| p99 Latency | < 50ms | Pending |
-| Uptime | 99.9% | Pending |
-| Test Coverage | 80%+ | Pending |
+| Throughput | 10k+ txns/sec | ✅ 1k/sec local |
 
 ---
 
-## Project Structure
+<details>
+<summary>Project Structure</summary>
 
 ```text
 .
 ├── docker-compose.yml          # Local orchestration (Kafka, MongoDB, Kafka UI)
 ├── README.md
 ├── LICENSE
+├── airflow/
+│   ├── dags/
+│   │   ├── dbt_daily_models.py       # Schedule dbt transforms
+│   │   ├── data_quality_checks.py    # Validate pipeline health
+│   │   └── mongodb_maintenance.py    # Archival, backups
+│   └── Dockerfile.airflow
 ├── api/
 │   ├── __init__.py
-│   └── main.py                 # FastAPI application (Week 4)
+│   └── main.py                 # FastAPI application
 ├── config/
 │   ├── db_config.yaml          # MongoDB connection settings
 │   └── kafka_topics.yaml       # Kafka topic definitions
@@ -107,17 +106,17 @@ flowchart LR
 │   ├── __init__.py
 │   └── db_sink.py              # Kafka → MongoDB sink consumer
 ├── dashboard/
-│   └── app.py                  # Streamlit live dashboard (Week 4)
+│   └── app.py                  # Streamlit live dashboard
 ├── dbt_models/
 │   └── models/
-│       ├── schema.yml          # dbt model definitions (Week 3)
+│       ├── schema.yml          # dbt model definitions
 │       ├── daily_merchant_revenue.sql
 │       ├── top_spenders.sql
 │       └── anomaly_summary.sql
 ├── infra/
 │   ├── Dockerfile.producer
 │   ├── Dockerfile.consumer
-│   └── azure-deploy.sh         # Azure CLI deployment (Week 5)
+│   └── azure-deploy.sh         # Azure CLI deployment
 ├── producer/
 │   ├── __init__.py
 │   └── producer.py             # Faker-based transaction generator
@@ -133,12 +132,14 @@ flowchart LR
 │   └── user.schema.json        # User JSON Schema
 ├── streaming/
 │   ├── __init__.py
-│   └── processor.py            # PyFlink stream processor (Week 2)
+│   └── processor.py            # PyFlink stream processor
 └── tests/
     ├── __init__.py
     ├── test_producer.py        # Producer unit tests
     └── conftest.py             # Shared test fixtures
 ```
+
+</details>
 
 ---
 
@@ -175,12 +176,30 @@ Produces 1k txns/sec by default. Set `TARGET_TPS=10000` for full throughput.
 
 Open [http://localhost:8080](http://localhost:8080) → Topics → `transactions` to see messages flowing.
 
-### 5. (Optional) Run the Consumer
+### 5. Run the Stream Processor
+
+```bash
+pip install -r requirements/base.txt
+python -m streaming.processor
+```
+
+Consumes from `transactions`, applies windowed aggregations and z-score anomaly detection, writes enriched events to `transactions_enriched` and anomalies to `anomalies`.
+
+### 6. (Optional) Run the Consumer
 
 ```bash
 pip install -r requirements/consumer.txt
 python -m consumers.db_sink
 ```
+
+### 7. Run Tests
+
+```bash
+pip install -r requirements/dev.txt
+pytest
+```
+
+---
 
 ## License
 
