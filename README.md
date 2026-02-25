@@ -35,7 +35,7 @@ flowchart LR
 6. **FastAPI** exposes REST endpoints (`/users/{id}/trends`, `/anomalies`, `/merchants/top`).
 7. **Streamlit Dashboard** provides live charts: transaction volume, top merchants, anomaly alerts.
 
-> **Status:** Core streaming pipeline (steps 1–3) is complete and functional. Orchestration, batch models, API, and dashboard are in active development.
+> **Status:** Core streaming pipeline (steps 1–3) and REST API (step 6) are complete and functional. Orchestration, batch models, and dashboard are in active development.
 
 ---
 
@@ -71,6 +71,12 @@ flowchart LR
 - **MongoDB time-series storage**:
   - Optimised time-series collections with secondary indexes
   - Idempotent upserts (batch bulk writes)
+- **FastAPI REST API**:
+  - `/users/{id}/trends` — per-user spending trends with aggregated stats, top categories
+  - `/anomalies` — recent anomaly alerts, filterable by user/z-score
+  - `/merchants/top` — top merchants ranked by revenue
+  - `/health` — liveness probe, `/docs` — interactive Swagger UI
+  - Pydantic response models, CORS middleware
 
 ---
 
@@ -87,15 +93,10 @@ flowchart LR
 
 ```text
 .
-├── docker-compose.yml          # Local orchestration (Kafka, MongoDB, Kafka UI)
+├── docker-compose.yml          # Local orchestration (Kafka, MongoDB, Kafka UI, API)
 ├── README.md
 ├── LICENSE
-├── airflow/
-│   ├── dags/
-│   │   ├── dbt_daily_models.py       # Schedule dbt transforms
-│   │   ├── data_quality_checks.py    # Validate pipeline health
-│   │   └── mongodb_maintenance.py    # Archival, backups
-│   └── Dockerfile.airflow
+├── airflow/ (planned)
 ├── api/
 │   ├── __init__.py
 │   └── main.py                 # FastAPI application
@@ -106,17 +107,13 @@ flowchart LR
 │   ├── __init__.py
 │   └── db_sink.py              # Kafka → MongoDB sink consumer
 ├── dashboard/
-│   └── app.py                  # Streamlit live dashboard
+│   └── app.py                  # Streamlit live dashboard (planned)
 ├── dbt_models/
-│   └── models/
-│       ├── schema.yml          # dbt model definitions
-│       ├── daily_merchant_revenue.sql
-│       ├── top_spenders.sql
-│       └── anomaly_summary.sql
+│   └── models/                 # dbt transforms (planned)
 ├── infra/
-│   ├── Dockerfile.producer
-│   ├── Dockerfile.consumer
-│   └── azure-deploy.sh         # Azure CLI deployment
+│   ├── Dockerfile.api          # API container
+│   ├── Dockerfile.producer     # Producer container
+│   └── Dockerfile.consumer     # Consumer container
 ├── producer/
 │   ├── __init__.py
 │   └── producer.py             # Faker-based transaction generator
@@ -192,7 +189,18 @@ pip install -r requirements/consumer.txt
 python -m consumers.db_sink
 ```
 
-### 7. Run Tests
+### 7. Run the API
+
+```bash
+pip install -r requirements/api.txt
+python -m uvicorn api.main:app --reload
+```
+
+Open [http://localhost:8000/docs](http://localhost:8000/docs) for interactive Swagger UI.
+
+Endpoints: `/health`, `/users/{user_id}/trends`, `/anomalies`, `/merchants/top`.
+
+### 8. Run Tests
 
 ```bash
 pip install -r requirements/dev.txt
