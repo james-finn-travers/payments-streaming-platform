@@ -119,6 +119,23 @@ services:
     networks:
       - txn-network
 
+  api:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.api
+    container_name: txn-api
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URI: "mongodb://mongo:27017"
+      MONGO_DB: txn_analytics
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    networks:
+      - txn-network
+
   airflow-webserver:
     image: apache/airflow:2.8.1-python3.9
     environment:
@@ -132,7 +149,9 @@ services:
       - "8081:8080"
     command: airflow standalone
     depends_on:
-      - mongodb
+      - mongo
+    networks:
+      - txn-network
 
 volumes:
   mongo_data:
