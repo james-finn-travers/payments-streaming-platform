@@ -13,7 +13,6 @@ Requires: Apache Flink 1.18+, PyFlink, kafka-connector JAR.
 import os
 import json
 import logging
-from datetime import timedelta
 
 from pyflink.common import Types, WatermarkStrategy, Duration
 from pyflink.common.serialization import SimpleStringSchema
@@ -32,7 +31,6 @@ from pyflink.datastream.functions import (
     RuntimeContext,
     ValueStateDescriptor,
 )
-from pyflink.common.typeinfo import TypeInformation
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -45,6 +43,7 @@ CONSUMER_GROUP = os.getenv("FLINK_CONSUMER_GROUP", "flink-txn-processor")
 PARALLELISM = int(os.getenv("FLINK_PARALLELISM", "2"))
 ANOMALY_SD_THRESHOLD = float(os.getenv("ANOMALY_SD_THRESHOLD", "3.0"))
 WINDOW_SIZE_SECONDS = int(os.getenv("WINDOW_SIZE_SECONDS", "86400"))  # 1 day
+DAILY_SPEND_TOPIC = os.getenv("KAFKA_DAILY_SPEND_TOPIC","daily_spend")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -163,22 +162,49 @@ def build_pipeline():
         .build()
     )
 
-    watermark = (
-        WatermarkStrategy
-        .for_bounded_out_of_orderness(Duration.of_seconds(5))
-    )
 
-    raw_stream = env.from_source(source, watermark, "KafkaSource")
+
+    raw_stream = env.from_source(source, WatermarkStrategy.no_watermarks(), "KafkaSource")
 
     # --- Parse JSON ---
     parsed = raw_stream.map(ParseTransaction()).filter(lambda x: x is not None)
+    
+    watermarked = parsed.assign_timestamps_and_watermarks(
+        WatermarkStrategy
+        .for_bounded_out_of_orderness(Duration.of_seconds(5))
+        .with_timestamp_assigner(
+            lambda txn, _: int(txn.get("timestamp",0)*1000)
+        )
+    )
 
     # --- Anomaly detection (keyed by user_id) ---
     enriched = (
-        parsed
+        watermarked
         .key_by(lambda txn: txn["user_id"])
         .process(AnomalyDetector())
     )
+    
+    # --- Daily spend windows per user
+    daily_spend = (
+        watermarked
+        .key_by(lambda txn: txn["user_id"])
+        .window(TumblingEventTimeWindows.of(Time.seconds(WINDOW_SIZE_SECONDS)))
+        .process(WindowAggregate())
+    )
+    
+    # --- Daily spend -> Kafka topic --- 
+    daily_spend_sink = (
+        KafkaSink.builder()
+        .set_bootstrap_servers(KAFKA_BOOTSTRAP)
+        .set_record_serializer(
+            KafkaRecordSerializationSchema.builder()
+            .set_topic(DAILY_SPEND_TOPIC)
+            .set_value_serialization_schema(SimpleStringSchema())
+            .build()
+        )
+        .build()
+    )
+    daily_spend.map(lambda agg: json.dumps(agg)).sink_to(daily_spend_sink)    
 
     # --- Kafka sink for enriched events ---
     enriched_sink = (
