@@ -35,7 +35,7 @@ flowchart LR
 6. **FastAPI** exposes REST endpoints (`/users/{id}/trends`, `/anomalies`, `/merchants/top`).
 7. **Streamlit Dashboard** provides live charts: transaction volume, top merchants, anomaly alerts.
 
-> **Status:** Core streaming pipeline (steps 1–3) and REST API (step 6) are complete and functional. Orchestration, batch models, and dashboard are in active development.
+> **Status:** Core streaming pipeline (steps 1–3), REST API (step 6), and live dashboard (step 7) are complete and functional. Orchestration and batch models are in active development.
 
 ---
 
@@ -77,6 +77,14 @@ flowchart LR
   - `/merchants/top` — top merchants ranked by revenue
   - `/health` — liveness probe, `/docs` — interactive Swagger UI
   - Pydantic response models, CORS middleware
+- **Streamlit Dashboard**:
+  - KPI summary cards (total txns, revenue, avg amount, anomaly count)
+  - Hourly transaction volume area chart
+  - Top merchants by revenue (horizontal bar chart, colour-coded by category)
+  - Spend breakdown by category (donut chart)
+  - Transaction status distribution (donut chart)
+  - Recent anomaly alerts table with z-score
+  - Configurable lookback period, auto-refresh (30 s)
 
 ---
 
@@ -107,7 +115,7 @@ flowchart LR
 │   ├── __init__.py
 │   └── db_sink.py              # Kafka → MongoDB sink consumer
 ├── dashboard/
-│   └── app.py                  # Streamlit live dashboard (planned)
+│   └── app.py                  # Streamlit live dashboard
 ├── dbt_models/
 │   └── models/                 # dbt transforms (planned)
 ├── infra/
@@ -200,7 +208,16 @@ Open [http://localhost:8000/docs](http://localhost:8000/docs) for interactive Sw
 
 Endpoints: `/health`, `/users/{user_id}/trends`, `/anomalies`, `/merchants/top`.
 
-### 8. Run Tests
+### 8. Run the Dashboard
+
+```bash
+pip install -r requirements/dashboard.txt
+streamlit run dashboard/app.py
+```
+
+Open [http://localhost:8501](http://localhost:8501) for the live monitoring dashboard. Use the sidebar to adjust the lookback period and toggle auto-refresh.
+
+### 9. Run Tests
 
 ```bash
 pip install -r requirements/dev.txt
