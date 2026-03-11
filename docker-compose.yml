@@ -111,11 +111,31 @@ services:
         condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_ENRICHED_TOPIC: transactions
+      KAFKA_ENRICHED_TOPIC: transactions_enriched
       KAFKA_ANOMALY_TOPIC: anomalies
       MONGO_URI: "mongodb://mongo:27017"
       MONGO_DB: txn_analytics
       LOG_LEVEL: INFO
+    networks:
+      - txn-network
+
+  daily-spend-consumer:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.consumer
+    container_name: txn-daily-spend-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_DAILY_SPEND_TOPIC: daily_spend
+      MONGO_URI: "mongodb://mongo:27017"
+      MONGO_DB: txn_analytics
+      LOG_LEVEL: INFO
+    command: ["python", "-m", "consumers.daily_spend_sink"]
     networks:
       - txn-network
 
@@ -136,8 +156,92 @@ services:
     networks:
       - txn-network
 
+  # -----------------------------------------------------------------------
+  # Apache Flink (stream processing)
+  # -----------------------------------------------------------------------
+  flink-jobmanager:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.flink
+    container_name: flink-jobmanager
+    restart: unless-stopped
+    ports:
+      - "8082:8081"    # Flink Web UI
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        state.backend: hashmap
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - txn-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  flink-taskmanager:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.flink
+    container_name: flink-taskmanager
+    restart: unless-stopped
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        state.backend: hashmap
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    networks:
+      - txn-network
+
+  flink-job-submit:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.flink
+    container_name: flink-job-submit
+    restart: "no"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_SOURCE_TOPIC: transactions
+      KAFKA_SINK_TOPIC: transactions_enriched
+      KAFKA_ANOMALY_TOPIC: anomalies
+      KAFKA_DAILY_SPEND_TOPIC: daily_spend
+      FLINK_PARALLELISM: "2"
+      ANOMALY_SD_THRESHOLD: "3.0"
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+    command: >
+      bash -c "
+        echo 'Waiting for Flink cluster …' &&
+        until curl -sf http://flink-jobmanager:8081/overview; do sleep 3; done &&
+        echo 'Submitting PyFlink job …' &&
+        flink run --python /opt/flink/jobs/streaming/processor.py
+      "
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+      flink-taskmanager:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    networks:
+      - txn-network
+
   airflow-webserver:
-    image: apache/airflow:2.8.1-python3.9
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile.airflow
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
@@ -148,6 +252,20 @@ services:
     ports:
       - "8081:8080"
     command: airflow standalone
+    depends_on:
+      - mongo
+    networks:
+      - txn-network
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.dashboard
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB=txn_analytics
+    ports:
+      - "8501:8501"
     depends_on:
       - mongo
     networks:

@@ -16,6 +16,7 @@ import logging
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional
+import random
 
 from faker import Faker
 from kafka import KafkaProducer
@@ -92,9 +93,7 @@ def generate_transaction() -> dict:
         2,
     )
 
-    status = fake.random_element(
-        elements=STATUSES,
-    )
+    status = random.choices(STATUSES, weights=STATUS_WEIGHTS, k=1)[0]
 
     txn = {
         "txn_id": _idempotent_txn_id(user["user_id"], now, amount),

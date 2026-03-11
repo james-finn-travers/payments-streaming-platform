@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: fct_daily_revenue
+    description: >
+      Daily revenue by merchant category and currency, with rolling
+      7-day / 30-day windows and day-over-day growth.
+    columns:
+      - name: txn_date
+        tests:
+          - not_null
+      - name: merchant_category
+        tests:
+          - not_null
+      - name: total_revenue
+        tests:
+          - not_null
+      - name: txn_count
+        description: Number of approved transactions on that day.
+        tests:
+          - not_null
+
+  - name: dim_merchants
+    description: >
+      Merchant dimension with lifetime stats and anomaly rate.
+    columns:
+      - name: merchant_id
+        tests:
+          - unique
+          - not_null
+      - name: lifetime_revenue
+        tests:
+          - not_null
+
+  - name: fct_merchant_rollup
+    description: >
+      Rolling 30-day merchant performance compared to lifetime totals.
+    columns:
+      - name: merchant_id
+        tests:
+          - unique
+          - not_null
+      - name: recent_revenue
+        tests:
+          - not_null
+
+  - name: fct_anomaly_summary
+    description: >
+      Daily anomaly counts by merchant category with severity
+      breakdown and 7-day rolling average.
+    columns:
+      - name: anomaly_date
+        tests:
+          - not_null
+      - name: anomaly_count
+        tests:
+          - not_null

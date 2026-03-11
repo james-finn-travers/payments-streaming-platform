@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: stg_transactions
+    description: >
+      Deduplicated, typed transactions with derived date/time columns.
+      Source: MongoDB transactions collection exported to Parquet.
+    columns:
+      - name: txn_id
+        description: Deterministic SHA-256 transaction identifier.
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+      - name: amount
+        tests:
+          - not_null
+      - name: timestamp
+        tests:
+          - not_null
+      - name: merchant_id
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["approved", "declined", "pending"]
+
+  - name: stg_anomalies
+    description: >
+      Deduplicated anomaly events flagged by the Flink z-score detector.
+    columns:
+      - name: txn_id
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+      - name: z_score
+        tests:
+          - not_null

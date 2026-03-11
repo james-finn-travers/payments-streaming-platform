@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Parquet snapshots exported from MongoDB by the
+      export_mongo_to_parquet.py script. DuckDB reads these
+      directly via read_parquet().
+    meta:
+      external_location: "dbt_models/seeds/raw/{name}.parquet"

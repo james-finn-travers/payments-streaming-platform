@@ -1,0 +1,17 @@
+# Custom Airflow image with dbt, pymongo, and pyarrow pre-installed
+# so that DAGs (dbt_daily_models, data_quality_checks, mongodb_maintenance)
+# have all required Python dependencies at runtime.
+
+FROM apache/airflow:2.8.1-python3.9
+
+USER airflow
+
+# Install Python deps needed by the DAGs
+RUN pip install --no-cache-dir \
+    pymongo>=4.6 \
+    dbt-core>=1.7 \
+    dbt-duckdb>=1.7 \
+    pyarrow>=14.0
+
+# dbt profiles live alongside the models (mounted as a volume)
+ENV DBT_PROFILES_DIR=/opt/dbt_models

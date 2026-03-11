@@ -1,0 +1,11 @@
+# DuckDB connection profile
+# In production this file lives in ~/.dbt/profiles.yml.
+# Kept here for portability within Docker/Airflow.
+
+txn_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /tmp/txn_analytics.duckdb   # ephemeral; rebuilt each run
+      threads: 4

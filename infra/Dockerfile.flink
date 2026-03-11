@@ -1,0 +1,25 @@
+FROM flink:1.18.1-java11
+
+# ---------------------------------------------------------------------------
+# Python + PyFlink
+# ---------------------------------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-pip python3-dev wget && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir apache-flink==1.18.1
+
+# ---------------------------------------------------------------------------
+# Kafka connector JAR (must match Flink 1.18)
+# ---------------------------------------------------------------------------
+RUN wget -q -P /opt/flink/lib/ \
+    https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/flink-sql-connector-kafka-3.0.2-1.18.jar
+
+# ---------------------------------------------------------------------------
+# Copy processor code
+# ---------------------------------------------------------------------------
+COPY streaming/ /opt/flink/jobs/streaming/
+
+WORKDIR /opt/flink

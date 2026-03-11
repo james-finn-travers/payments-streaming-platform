@@ -23,6 +23,13 @@ topics:
     retention_ms: 2592000000  # 30 days
     cleanup_policy: delete
 
+  daily_spend:
+    description: "Windowed daily-spend aggregates per user (from PyFlink tumbling window)"
+    partitions: 3
+    replication_factor: 1
+    retention_ms: 604800000  # 7 days
+    cleanup_policy: delete
+
 defaults:
   bootstrap_servers: "localhost:9092"
   # Docker internal: "kafka:29092"

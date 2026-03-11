@@ -1,0 +1,6 @@
+# dbt + DuckDB batch analytics dependencies
+-r base.txt
+pymongo>=4.6
+dbt-core>=1.7
+dbt-duckdb>=1.7
+pyarrow>=14.0
